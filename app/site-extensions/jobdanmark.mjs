@@ -207,7 +207,7 @@ function divContent(html, name) {
   const tags = /<(\/?)div\b[^>]*>/gi;
   tags.lastIndex = from;
   let depth = 1;
-  for (let m; (m = tags.exec(html)); )
+  for (let m; (m = tags.exec(html));)
     if (!(depth += m[1] ? -1 : 1)) return html.slice(from, m.index);
   return null;
 }

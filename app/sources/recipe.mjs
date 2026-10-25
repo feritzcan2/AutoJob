@@ -293,10 +293,10 @@ export const jevListingItem = (item) =>
   item.discovery?.decision === 'listing' ||
   Boolean(
     item.collected &&
-      item.pageKind !== 'results' &&
-      item.assessment &&
-      (item.assessment.decision === 'possible' ||
-        (item.assessment.decision === 'mismatch' && item.assessment.reason !== 'not_listing')),
+    item.pageKind !== 'results' &&
+    item.assessment &&
+    (item.assessment.decision === 'possible' ||
+      (item.assessment.decision === 'mismatch' && item.assessment.reason !== 'not_listing')),
   );
 
 // Judge one finished scan from its Jev tasks. Access barriers and loading

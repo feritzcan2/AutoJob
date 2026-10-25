@@ -605,8 +605,8 @@ export function collectorPageReady(db, runId) {
   const task = pageTask(db, run, search);
   return Boolean(
     task &&
-      (task.batch ||
-        task.items.some((i) => search.pendingUrls.includes(i.url) && !i.reviewed && !i.error)),
+    (task.batch ||
+      task.items.some((i) => search.pendingUrls.includes(i.url) && !i.reviewed && !i.error)),
   );
 }
 // Pages read on past only known listings before a background read stops.

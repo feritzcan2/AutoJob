@@ -7,10 +7,10 @@ export function isResumeRejection(message = '') {
 export function rejectedResumeOnExit(active) {
   return Boolean(
     active?.resumeId &&
-      active.provider === 'codex' &&
-      /Error:\s*Permission overrides are not supported when resuming a remote task\./i.test(
-        (active.resumeDiagnostic ?? '').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, ''),
-      ),
+    active.provider === 'codex' &&
+    /Error:\s*Permission overrides are not supported when resuming a remote task\./i.test(
+      (active.resumeDiagnostic ?? '').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, ''),
+    ),
   );
 }
 export async function startWithResumeRepair(

@@ -387,15 +387,15 @@ export function automationResultsTable(
   const eligible = (result) =>
     Boolean(
       result.recordAction?.scoreOperation &&
-        !result.recordAction.scoreOperation.disabled &&
-        !requests.has(data.automation.id + ':' + result.id),
+      !result.recordAction.scoreOperation.disabled &&
+      !requests.has(data.automation.id + ':' + result.id),
     );
   const deletable = (result) =>
     Boolean(
       api.automationRecordsDelete &&
-        !result.recordAction?.task &&
-        result.status !== 'executing' &&
-        !requests.has(data.automation.id + ':' + result.id),
+      !result.recordAction?.task &&
+      result.status !== 'executing' &&
+      !requests.has(data.automation.id + ':' + result.id),
     );
   const selectableRecord = (result) => eligible(result) || deletable(result);
   const clearSelection = button('Clear selection', () => {
@@ -477,9 +477,9 @@ export function automationResultsTable(
   const skippable = (result) =>
     Boolean(
       api.automationDismiss &&
-        ['found', 'prepared', 'uncertain'].includes(result.status) &&
-        !result.recordAction?.task &&
-        !requests.has(data.automation.id + ':' + result.id),
+      ['found', 'prepared', 'uncertain'].includes(result.status) &&
+      !result.recordAction?.task &&
+      !requests.has(data.automation.id + ':' + result.id),
     );
   const skipSelected = button('Skip selected', async () => {
     if (
@@ -767,7 +767,7 @@ export function automationResultsTable(
     const query = search.value.trim().toLocaleLowerCase('en-GB').split(/\s+/).filter(Boolean);
     const hasScore = Boolean(
       data.definition.recordOperations?.score ||
-        data.automation.table?.columns?.some((column) => column.key === 'score'),
+      data.automation.table?.columns?.some((column) => column.key === 'score'),
     );
     scoreFilter.hidden = !hasScore;
     const threshold =

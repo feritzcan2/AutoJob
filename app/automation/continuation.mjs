@@ -168,16 +168,16 @@ export function automationRunHistory(db, run, base, profileId = null, protocol =
     !protocol ||
     Boolean(
       nativeId &&
-        db
-          .runs(run.automationId)
-          .some(
-            (r) =>
-              r.conversation?.provider === provider &&
-              r.conversation?.nativeId === nativeId &&
-              r.conversation?.profileId === profileId &&
-              r.conversation?.protocol === protocol &&
-              (!run.evidenceEpoch || r.evidenceEpoch === run.evidenceEpoch),
-          ),
+      db
+        .runs(run.automationId)
+        .some(
+          (r) =>
+            r.conversation?.provider === provider &&
+            r.conversation?.nativeId === nativeId &&
+            r.conversation?.profileId === profileId &&
+            r.conversation?.protocol === protocol &&
+            (!run.evidenceEpoch || r.evidenceEpoch === run.evidenceEpoch),
+        ),
     );
   return {
     forProfile: (profile) => automationRunHistory(db, run, base, profile, protocol),

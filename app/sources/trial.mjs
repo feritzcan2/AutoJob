@@ -19,8 +19,8 @@ export function sourceTrialReady(a, url, {siteSearch = false} = {}) {
   if (state?.trial) return state.trial.status === 'passed';
   return Boolean(
     recipe?.entry.kind === 'url_template' &&
-      !recipeNeedsTerms(recipe) &&
-      state?.recipeState?.status !== 'stale' &&
-      siteSearch,
+    !recipeNeedsTerms(recipe) &&
+    state?.recipeState?.status !== 'stale' &&
+    siteSearch,
   );
 }

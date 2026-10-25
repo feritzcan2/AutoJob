@@ -316,8 +316,8 @@ export function scanWorkVerified(run) {
   const work = run.scan?.work;
   return Boolean(
     work &&
-      work.searches.every((s) => s.status === 'completed') &&
-      !pendingScanUrls(scanWork(run)).length,
+    work.searches.every((s) => s.status === 'completed') &&
+    !pendingScanUrls(scanWork(run)).length,
   );
 }
 export function otherScanSearchesPending(run) {

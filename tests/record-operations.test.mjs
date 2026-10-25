@@ -1060,9 +1060,8 @@ test('manual preparation takes the next free worker ahead of automatic pending w
 });
 
 test('table projection exposes queued, running, answered and stopped record activity', async (t) => {
-  const {recordOperationStatus, recordActivityAt} = await import(
-    '../src/record-operation-status.js'
-  );
+  const {recordOperationStatus, recordActivityAt} =
+    await import('../src/record-operation-status.js');
   const f = fixture(t);
   await f.runtime.runOnce(f.id);
   await settle();

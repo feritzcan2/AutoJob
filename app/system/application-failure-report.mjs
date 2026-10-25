@@ -67,10 +67,10 @@ const APPLICANT_SYSTEMS = new Set([
 export function reportableApplicationFailure(run, previousStatus) {
   return Boolean(
     run &&
-      run.recordOperation === 'execute' &&
-      REPORTED_STATUSES.has(run.status) &&
-      previousStatus !== run.status &&
-      !USER_SIDE.has(run.blocker?.category),
+    run.recordOperation === 'execute' &&
+    REPORTED_STATUSES.has(run.status) &&
+    previousStatus !== run.status &&
+    !USER_SIDE.has(run.blocker?.category),
   );
 }
 

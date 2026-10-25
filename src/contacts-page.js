@@ -335,11 +335,7 @@ export function contactsPage(root, api, {refresh}) {
     return head;
   }
   const listingLink = (result) => {
-    const link = button(
-      `${result.title} ↗`,
-      () => api.openLink(result.url),
-      'quiet contacts-pill',
-    );
+    const link = button(`${result.title} ↗`, () => api.openLink(result.url), 'quiet contacts-pill');
     link.title = result.url;
     return link;
   };

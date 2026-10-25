@@ -15,12 +15,12 @@ const scanSite = (run) => (scanSource(run) ? host(scanSource(run)) : 'multiple_s
 export function reportableScanFailure(run, previousStatus) {
   return Boolean(
     run &&
-      ['run', 'trial'].includes(run.kind) &&
-      (scanSource(run) || run.sources?.length > 1) &&
-      !run.recordId &&
-      !run.recordOperation &&
-      REPORTED_STATUSES.has(run.status) &&
-      previousStatus !== run.status,
+    ['run', 'trial'].includes(run.kind) &&
+    (scanSource(run) || run.sources?.length > 1) &&
+    !run.recordId &&
+    !run.recordOperation &&
+    REPORTED_STATUSES.has(run.status) &&
+    previousStatus !== run.status,
   );
 }
 

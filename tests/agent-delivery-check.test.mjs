@@ -11,7 +11,7 @@ const PROMPT = 'Current user request (JSON):\n{"task":"Read the synthetic CV."}\
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Slow runners read the transcript later than a fixed pause allows.
 async function until(check, ms = 2000) {
-  for (const end = Date.now() + ms; !check() && Date.now() < end; ) await wait(10);
+  for (const end = Date.now() + ms; !check() && Date.now() < end;) await wait(10);
 }
 
 async function fixture(t) {

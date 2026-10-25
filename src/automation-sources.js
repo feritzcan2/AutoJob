@@ -212,9 +212,9 @@ export function automationSourcesPanel(host, api, {refresh, notice, ask}) {
     !source.scanning &&
     Boolean(
       source.blocked ||
-        source.siteWait?.exhausted ||
-        source.trial?.status === 'failed' ||
-        recipeStale(source),
+      source.siteWait?.exhausted ||
+      source.trial?.status === 'failed' ||
+      recipeStale(source),
     );
 
   // Header actions: add a source or ask the agent to find one.

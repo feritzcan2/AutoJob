@@ -1132,9 +1132,9 @@ export function automationWorkflow({
       clicks = pane && pages.pane,
       pacing = clicks || pages,
       [key, unit] = clicks ? [' pane', 'card clicks'] : [' browser', 'pages'];
-    for (let delay; (delay = db.siteAccess.rest(site + key, pacing.rest)) > 0; )
+    for (let delay; (delay = db.siteAccess.rest(site + key, pacing.rest)) > 0;)
       await waitFor(delay, 'a short reading break');
-    for (let delay; (delay = db.siteAccess.reserve(site + key, pacing.budget)) > 0; )
+    for (let delay; (delay = db.siteAccess.reserve(site + key, pacing.budget)) > 0;)
       await waitFor(delay, `the limit of ${pacing.budget.requests} ${unit} an hour`);
     const gap = db.siteAccess.pace('https://' + site, pacing.minIntervalMs, pacing.jitterMs);
     if (gap) await waitFor(gap, null);
@@ -1870,12 +1870,10 @@ export function automationWorkflow({
       case 'browser_tabs':
       case 'browser_use_tab':
       case 'browser_close_tab': {
-        if (
-          !(
-            (active.sourceUrl && !active.recordId) ||
-            (active.recordOperation && name !== 'browser_close_tab')
-          )
-        )
+        if (!(
+          (active.sourceUrl && !active.recordId) ||
+          (active.recordOperation && name !== 'browser_close_tab')
+        ))
           throw Error('Tab handover is only available in a source scan or an assigned record task');
         if (name !== 'browser_tabs') snapshots.invalidate();
         const response = await callBrowser(id, name, args, run.id);
