@@ -757,3 +757,13 @@ main,
     width: 100%;
   }
 }
+.document-rename {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+.document-rename input {
+  flex: 1;
+  min-width: 0;
+}

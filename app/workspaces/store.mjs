@@ -4,6 +4,7 @@ import {WorkspaceTasks} from './tasks.mjs';
 import {WorkspaceWorkers} from './workers.mjs';
 import {TemplateRegistry} from '../templates/registry.mjs';
 import {WorkspaceRecords} from './records.mjs';
+import {WorkspaceDocumentNames} from './document-names.mjs';
 import {contextCompactTokens} from '../agents/context-compaction.mjs';
 import {contextRestartTokens} from '../agents/context-usage.mjs';
 import {automationTable, automationCells} from '../templates/catalog.mjs';
@@ -32,6 +33,7 @@ export class WorkspaceStore {
       if (table) update.run(JSON.stringify({...w, table}), w.id);
     }
     this.records = new WorkspaceRecords(this);
+    this.documentNames = new WorkspaceDocumentNames(this);
     this.tasks = new WorkspaceTasks(this);
     this.workers = new WorkspaceWorkers(this);
   }
