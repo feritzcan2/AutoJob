@@ -342,6 +342,7 @@ async function boot() {
       config: () => jevSettings.config(),
       profile: core.workspaces.get(id).chromeProfile,
       lifecycle: {multiWorker: true},
+      documentName: (file) => documents.displayName(id, file),
     }),
     workers: {
       add: (id, input) => web.runtime.add(id, input),
@@ -471,6 +472,7 @@ async function boot() {
   handle('delete-workspace', (id) => workspaces.remove(id));
   handle('documents', (id) => documents.list(id));
   handle('pick-document', (id, options) => documents.pick(id, options));
+  handle('rename-document', (id, file, name) => documents.rename(id, file, name));
   handle('read-document', (id, file) => documents.read(id, file));
   handle('open-document', (id, file) => documents.open(id, file));
   handle('worker-add', (id, input) => workspaces.addWorker(id, input));

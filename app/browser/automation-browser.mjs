@@ -96,6 +96,8 @@ export function automationBrowser(
       // An autocomplete result names the offered options and what was chosen.
       ...(page.suggestions ? {suggestions: page.suggestions} : {}),
       ...(page.selection ? {selection: page.selection} : {}),
+      // The file name the employer receives for an upload.
+      ...(page.uploadedFileName ? {uploadedFileName: page.uploadedFileName} : {}),
     },
   });
   const document = async (id, result, session) => {

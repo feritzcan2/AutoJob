@@ -152,6 +152,7 @@ contextBridge.exposeInMainWorld('jobloop', {
   extensionSetup: (kind, profile) => invoke('extension-setup', kind, profile),
   documents: (id) => invoke('documents', id),
   pickDocument: (id, options) => invoke('pick-document', id, options),
+  renameDocument: (id, file, name) => invoke('rename-document', id, file, name),
   readDocument: (id, file) => invoke('read-document', id, file),
   openDocument: (id, file) => invoke('open-document', id, file),
   chromeProfiles: () => invoke('chrome-profiles'),

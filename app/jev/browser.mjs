@@ -9,7 +9,7 @@ import {observeFormFrame, actFormFrame, usableFormFrame} from './frame-actions.m
 import {captureCookieFrameTargets, clickCookieFrameTarget} from './cookie-frame.mjs';
 import {documentObservation, waitForDocument} from './document.mjs';
 import {readPane} from './pane.mjs';
-import {uploadDetails, validateUploadPurpose, isUploadTrigger} from './upload.mjs';
+import {uploadDetails, validateUploadPurpose, isUploadTrigger, uploadFile} from './upload.mjs';
 import {capturePasswordFields, savedLoginState} from './credentials.mjs';
 import {captureEmbeddedForms, embeddedFormTarget} from './frames.mjs';
 import {takeUploadAttempt} from './upload-budget.mjs';
@@ -96,6 +96,7 @@ export class JevBrowser {
       challengeGraceMs = CHALLENGE_GRACE_MS,
       checkpoints = [],
       accountVault = null,
+      documentName = async () => null,
       onDisconnect = () => {},
       onTabsClosed = () => {},
     } = {},
@@ -109,6 +110,7 @@ export class JevBrowser {
     this.headless = headless;
     this.workspace = workspace;
     this.workspaceId = workspaceId;
+    this.documentName = documentName;
     this.onDisconnect = onDisconnect;
     this.onTabsClosed = onTabsClosed;
     this.checkpoints = checkpoints;
@@ -606,6 +608,14 @@ export class JevBrowser {
       );
     return slot;
   }
+  // The name the page receives: the user's name for the document, else the
+  // stored file name. Both are checked against the field's purpose.
+  async uploadName(file, label) {
+    const name = (await this.documentName(file).catch(() => null)) || path.basename(file);
+    validateUploadPurpose(label, path.basename(file));
+    validateUploadPurpose(label, name);
+    return name;
+  }
   // Some forms create their file input only when the upload button is
   // clicked. Click that observed button while catching the file chooser it
   // opens and hand the workspace file to it; no native dialog is shown.
@@ -621,7 +631,7 @@ export class JevBrowser {
       workspace = await realpath(this.workspace ?? this.directory);
     if (!file.startsWith(workspace + path.sep) || !(await stat(file)).isFile())
       throw Error('Only files in the workspace of this candidate can be uploaded.');
-    validateUploadPurpose(label, path.basename(file));
+    const name = await this.uploadName(file, label);
     const info = await stat(file);
     if (
       !takeUploadAttempt(
@@ -648,13 +658,13 @@ export class JevBrowser {
         message:
           'The button did not open a file chooser. If a menu or option opened, use browser_upload_document with the targetId of its upload option; otherwise report the actual technical blocker.',
       };
-    await opened.setFiles(file, {timeout: 10000});
+    await opened.setFiles(await uploadFile(file, name), {timeout: 10000});
     return {
       ...(await this.observe(slot)),
       status: 'ready',
       executed: true,
-      message:
-        'The file was given to the file chooser the button opened. Check that the file name or upload status appears on the page.',
+      uploadedFileName: name,
+      message: `The file was given to the file chooser the button opened as "${name}". Check that the file name or upload status appears on the page.`,
     };
   }
   // A click that opens a new tab (target=_blank, window.open) leaves the
@@ -1903,7 +1913,7 @@ export class JevBrowser {
             workspace = await realpath(this.workspace ?? this.directory);
           if (!file.startsWith(workspace + path.sep) || !(await stat(file)).isFile())
             throw Error('Only files in the workspace of this candidate can be uploaded.');
-          validateUploadPurpose(upload.details.label, path.basename(file));
+          const name = await this.uploadName(file, upload.details.label);
           slot.pending = null;
           slot.uploads.delete(args.uploadId);
           try {
@@ -1915,11 +1925,14 @@ export class JevBrowser {
                   lastModified: f.lastModified,
                 })),
               );
-            const alreadySelected =
-              selected.length === 1 &&
-              selected[0].name === path.basename(file) &&
-              selected[0].size === info.size &&
-              selected[0].lastModified === Math.trunc(info.mtimeMs);
+            // A renamed upload carries its bytes, not the file's modification time.
+            const payload = await uploadFile(file, name),
+              alreadySelected =
+                selected.length === 1 &&
+                selected[0].name === name &&
+                selected[0].size === info.size &&
+                (typeof payload !== 'string' ||
+                  selected[0].lastModified === Math.trunc(info.mtimeMs));
             const key = JSON.stringify([upload.url, upload.details, file, info.size, info.mtimeMs]);
             if (alreadySelected)
               value = {
@@ -1938,8 +1951,13 @@ export class JevBrowser {
                   'The limit of two attempts or 60 seconds for the same file/field was reached. Keep the draft and report the actual technical blocker; do not open the file chooser again.',
               };
             else {
-              await upload.input.setInputFiles(file, {timeout: 10000});
-              value = {...(await this.observe(slot)), status: 'ready', executed: true};
+              await upload.input.setInputFiles(payload, {timeout: 10000});
+              value = {
+                ...(await this.observe(slot)),
+                status: 'ready',
+                executed: true,
+                uploadedFileName: name,
+              };
             }
           } catch {
             value = {

@@ -1,7 +1,7 @@
 // @ts-check
 // Increase this version whenever a release changes the persisted data contract.
 // Startup takes a backup before opening Store when this version or the app changes.
-export const DATA_SCHEMA_VERSION = 45;
+export const DATA_SCHEMA_VERSION = 46;
 // Older data formats are no longer converted; such data is refused unchanged.
 export const MIN_DATA_SCHEMA_VERSION = 40;
 export const LOG_RETENTION = {

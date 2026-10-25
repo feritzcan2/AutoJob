@@ -1,3 +1,5 @@
+import path from 'node:path';
+import {readFile} from 'node:fs/promises';
 // A hidden native file input is usable only through a rendered associated UI.
 export function uploadDetails(e) {
   const rendered = (n) =>
@@ -114,4 +116,13 @@ export function validateUploadPurpose(label, filename) {
     throw Error(
       'A cover letter file cannot be uploaded to the CV field; choose the correct CV document.',
     );
+}
+
+// What to hand to setInputFiles / FileChooser.setFiles so the page receives
+// the file under its upload name. A file whose stored name is already that
+// name is passed by path, unchanged; otherwise its bytes go under the new name
+// (no temporary copy is written).
+export async function uploadFile(file, name) {
+  if (!name || name === path.basename(file)) return file;
+  return {name, buffer: await readFile(file)};
 }

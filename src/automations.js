@@ -1425,7 +1425,9 @@ export function automationsPage(
     docs.replaceChildren();
     const userDocuments = data.documents.filter((doc) => !doc.generated);
     for (const doc of userDocuments) {
-      const b = button(doc.name + ' ↗', () => api.openDocument(selected, doc.path));
+      const b = button((doc.displayName ?? doc.name) + ' ↗', () =>
+        api.openDocument(selected, doc.path),
+      );
       docs.append(b);
     }
     if (!userDocuments.length)
@@ -1514,8 +1516,28 @@ export function automationsPage(
         url: record?.url ?? null,
       };
     };
+    // A user document is uploaded under its display name; Rename edits only
+    // that name, never the stored file.
+    const renameForm = (row, doc) => {
+      const form = el('form', null, 'document-rename'),
+        input = el('input');
+      input.value = doc.displayName ?? doc.name;
+      input.maxLength = 120;
+      input.setAttribute('aria-label', 'File name employers receive');
+      const save = el('button', 'Save', 'primary');
+      save.type = 'submit';
+      const cancel = button('Cancel', () => renderWorkspacePages());
+      form.onsubmit = attempt(async () => {
+        await api.renameDocument(selected, doc.path, input.value);
+        await refresh();
+      });
+      form.append(input, save, cancel);
+      row.replaceChildren(form);
+      input.focus();
+      input.select();
+    };
     // Newest first, each with the time it was created.
-    const fileList = (target, docs, empty) => {
+    const fileList = (target, docs, empty, {rename = false} = {}) => {
       const files = find(target);
       files.replaceChildren();
       const newest = [...docs].sort((a, b) =>
@@ -1525,11 +1547,14 @@ export function automationsPage(
         const row = el('div', null, 'document-row'),
           name = el('div'),
           detail = fileDetail(doc);
-        name.append(el('strong', doc.name));
+        name.append(el('strong', doc.displayName ?? doc.name));
+        if (rename && doc.displayName && doc.displayName !== doc.name)
+          name.append(el('small', 'Stored as ' + doc.name));
         if (detail) name.append(el('small', detail.text));
         name.append(el('small', 'Created ' + time(doc.createdAt ?? doc.updatedAt)));
         const actions = el('div', null, 'document-actions');
         if (detail?.url) actions.append(button('Open listing ↗', () => api.openLink(detail.url)));
+        if (rename) actions.append(button('Rename', () => renameForm(row, doc)));
         actions.append(button('Open ↗', () => api.openDocument(selected, doc.path)));
         row.append(name, actions);
         files.append(row);
@@ -1540,6 +1565,7 @@ export function automationsPage(
       '#automation-file-list',
       data.documents.filter((doc) => !doc.generated),
       'Documents you add to the workspace appear here.',
+      {rename: true},
     );
     fileList(
       '#automation-generated-file-list',
