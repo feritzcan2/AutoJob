@@ -9,7 +9,12 @@
 //   {listings:[{url,text}],pagination} or null (the generic reader keeps the page).
 //   pagination holds the current page and, when there is one, the next page
 //   with its url; null when the extension cannot tell. A pagination without a
-//   next page tells the scan that this is the last results page.
+//   next page tells the scan that this is the last results page. A site that
+//   loads more results on the same page gives [{text, more: true}] instead
+//   while more remain, and dom.more: runs inside the page like collect and
+//   returns the element whose coming into view loads the next results (the
+//   last result card). The scan scrolls it into view as a person does and
+//   checks that the extension then reads more listings (../jev/more.mjs).
 //   Optionally dom.listing {handles(url), open?(url), collect, read(raw)} reads
 //   one posting page: open(url) gives the address to open it at in the browser
 //   (default url), collect runs inside the page like dom.collect, read(raw) returns

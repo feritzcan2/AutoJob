@@ -9,7 +9,7 @@
 // "Topbaan" cards on top are promoted listings and shown on every load.
 // More results load on scroll (the page fetches the site API ten at a time);
 // the address has no page parameter (?page=2 shows the first results again),
-// so there is no pagination for the extension to give. Listing pages show
+// so the extension asks the scan to scroll for more (pagination `more`). Listing pages show
 // similar listings in the same cards but no result count, and carry one
 // schema.org JobPosting that the generic reader takes. DPG Media's privacy
 // gate (myprivacy.dpgmedia.nl) is another host and stays with the generic
@@ -69,9 +69,13 @@ function listingUrl(hrefs, base) {
 // Returns {listings,pagination} for a page of result cards, or null when there
 // are none (still loading, the privacy gate, a changed layout) or the page is
 // a listing with similar listings beside it; the generic reader then handles
-// the page. pagination is null: more results load by scrolling the same page.
+// the page. More results load by scrolling the same page: pagination asks for
+// that while fewer cards than the result count ("1.272 banen") are loaded, and
+// is empty (the last results) once all are. Promoted cards count toward the
+// result count too.
 export function nationaleVacaturebankResults(raw) {
   if (!raw?.cards?.length || !isNationaleVacaturebankUrl(raw.url) || !raw.total) return null;
+  const total = Number(/^([\d.]+)/.exec(raw.total)?.[1].replaceAll('.', ''));
   const listings = new Map();
   for (const card of raw.cards) {
     const url = listingUrl(card.hrefs ?? [], raw.url);
@@ -92,7 +96,16 @@ export function nationaleVacaturebankResults(raw) {
           .join(' · '),
       });
   }
-  return {listings: [...listings.values()], pagination: null};
+  return {
+    listings: [...listings.values()],
+    pagination: !total ? null : listings.size < total ? [{text: 'More results', more: true}] : [],
+  };
+}
+
+// Runs inside the page: the last result card. Bringing it into view loads the
+// next ten results.
+export function nationaleVacaturebankMore() {
+  return [...document.querySelectorAll('article[class*="JobCard_card__"]')].at(-1) ?? null;
 }
 
 // The search address seen in the saved pages (2026-10-16). The page asks the
@@ -108,6 +121,10 @@ const search = {
 export default {
   id: 'nationale-vacaturebank',
   matches: isNationaleVacaturebankUrl,
-  dom: {collect: collectNationaleVacaturebankPage, results: nationaleVacaturebankResults},
+  dom: {
+    collect: collectNationaleVacaturebankPage,
+    results: nationaleVacaturebankResults,
+    more: nationaleVacaturebankMore,
+  },
   search,
 };

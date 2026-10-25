@@ -1145,6 +1145,87 @@ test('lazy results update the saved page receipt after scrolling without losing 
   );
 });
 
+test('a scroll answer on an endless list waits for the next batch and scrolls the results, not a side panel', async (t) => {
+  const f = fixture(t);
+  // Jev observations carry only positions; the page sits at the bottom until
+  // the next batch arrives.
+  let loaded = false,
+    scrolled = null,
+    waits = 0;
+  f.ports.wait = async () => {
+    waits++;
+    loaded = true;
+  };
+  f.ports.browser = async (name, args) => {
+    if (name === 'scroll') scrolled = args.controlId;
+    return {
+      url,
+      title: 'Homes',
+      text: scrolled ? 'All homes' : 'First homes',
+      links: [
+        {url: url + '/one', text: 'One'},
+        ...(scrolled ? [{url: url + '/two', text: 'Two'}] : []),
+      ],
+      scrollTargets: [
+        {controlId: 'filters', label: 'Form content', top: 0, height: 2212, viewport: 694},
+        {controlId: 'page', label: 'Page', top: 3100, height: loaded ? 6000 : 4000, viewport: 900},
+      ],
+    };
+  };
+  f.ports.evaluate = async (state, q) => ({
+    answers: Object.fromEntries(
+      Object.entries(q).map(([key, question]) => [
+        key,
+        answer(key === 'next' ? (scrolled ? 'end' : 'scroll') : 'listing', question.criteria),
+      ]),
+    ),
+  });
+  const scan = await f.run({operation: 'scan_results', url});
+  assert.equal(scan.status, 'completed');
+  assert.equal(scrolled, 'page');
+  assert.equal(waits, 1);
+  assert.equal(scan.total, 2);
+});
+
+test('a site extension that loads more on the same page loads it without asking the agent', async (t) => {
+  const f = fixture(t);
+  let batches = 1,
+    scrolls = 0,
+    asked = false;
+  f.ports.wait = async () => {};
+  f.ports.browser = async (name) => {
+    if (name === 'more') {
+      scrolls++;
+      batches = 2;
+    }
+    const links = [{url: url + '/one', text: 'One', listing: true}];
+    if (batches === 2) links.push({url: url + '/two', text: 'Two', listing: true});
+    return {
+      url,
+      title: 'Homes',
+      text: `Homes batch ${batches}`,
+      links,
+      paginationBy: 'site',
+      pagination: batches === 1 ? [{text: 'More results', more: true}] : [],
+      scrollTargets: [{controlId: 'page', label: 'Page', top: 0, height: 4000, viewport: 900}],
+    };
+  };
+  f.ports.evaluate = async (state, q) => {
+    if (q.next) asked = true;
+    return {
+      answers: Object.fromEntries(
+        Object.entries(q).map(([key, question]) => [key, answer('listing', question.criteria)]),
+      ),
+    };
+  };
+  const scan = await f.run({operation: 'scan_results', url});
+  assert.equal(scan.status, 'completed');
+  assert.equal(scrolls, 1);
+  assert.equal(asked, false);
+  assert.equal(scan.total, 2);
+  assert.equal(scan.lastPage.continuation.method, 'site_extension');
+});
+
 test('page text cut inside an emoji reaches Jev as well-formed Unicode', async () => {
   const questions = {fit: {type: 'choice', criteria: {keep: 'Keep', unknown: 'Unknown'}}},
     cut = 'Senior .NET Engineer \u{1F680}'.slice(0, -1);

@@ -27,7 +27,7 @@ function collect(t, html, href = results) {
   return collectNationaleVacaturebankPage();
 }
 
-test('result cards become their listing links with the card facts and no pagination', (t) => {
+test('result cards become their listing links with the card facts; more load by scrolling', (t) => {
   const raw = collect(t, fixture('search.html'));
   assert.equal(raw.url, results);
   assert.equal(raw.total, '1.283 banen');
@@ -63,15 +63,18 @@ test('result cards become their listing links with the card facts and no paginat
     ],
   );
   // More results load by scrolling; ?page=N shows the first results again.
-  assert.equal(read.pagination, null);
+  assert.deepEqual(read.pagination, [{text: 'More results', more: true}]);
+  // Once every result is loaded the list ends; promoted cards are results too.
+  const all = `${read.listings.length} banen`;
+  assert.deepEqual(nationaleVacaturebankResults({...raw, total: all}).pagination, []);
 });
 
-test('the same results under &page=2 are read the same way, without a next page', (t) => {
+test('the same results under &page=2 are read the same way', (t) => {
   const read = nationaleVacaturebankResults(
     collect(t, fixture('search.html'), `${results}&page=2`),
   );
   assert.equal(read.listings.length, 5);
-  assert.equal(read.pagination, null);
+  assert.deepEqual(read.pagination, [{text: 'More results', more: true}]);
 });
 
 test('preview, menu and saved-listing links are not listings', (t) => {
@@ -103,8 +106,9 @@ test('preview, menu and saved-listing links are not listings', (t) => {
     [read.listings[2], ...read.listings.filter((_, i) => i !== 2)].map((l) => l.url),
   );
   assert.equal(marked.links.filter((l) => !l.listing).length, 4);
-  // Without the extension's own pagination the generic reader's stays.
-  assert.deepEqual(marked.pagination, document.pagination);
+  // The extension's own pagination replaces the generic reader's.
+  assert.deepEqual(marked.pagination, read.pagination);
+  assert.equal(marked.paginationBy, 'nationale-vacaturebank');
   assert.equal(marked.siteExtension, 'nationale-vacaturebank');
 });
 

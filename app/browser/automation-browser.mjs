@@ -276,6 +276,8 @@ export function automationBrowser(
       } else if (name === 'browser_scroll') {
         tool = name;
         Object.assign(parameters, {controlId: args.controlId, direction: args.direction});
+      } else if (name === 'browser_load_more') {
+        tool = name;
       } else if (name === 'browser_reveal') {
         tool = name;
         parameters.controlId = args.controlId;

@@ -212,11 +212,14 @@ export function paginationScrollTarget(page, position) {
   );
   const ids = new Set(next.map((p) => p.scrollControlId));
   if (ids.size !== 1 || ids.has(undefined)) return null;
-  return (
-    (page.scrollTargets ?? []).find(
-      (t) => ids.has(t.controlId) && (t.atBottom === false || t.remainingDown > 0),
-    ) ?? null
-  );
+  return (page.scrollTargets ?? []).find((t) => ids.has(t.controlId) && scrollsDown(t)) ?? null;
+}
+
+// Jev observations give a scroll target's position (top, height, viewport), not
+// the room left below it.
+export function scrollsDown(target) {
+  if (typeof target.atBottom === 'boolean') return !target.atBottom;
+  return target.height - target.viewport - target.top > 2;
 }
 
 // Dropdowns of a results page (sort order, region, date range) with the names

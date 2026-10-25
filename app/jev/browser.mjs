@@ -60,6 +60,7 @@ import {
   wheelScrollNode,
 } from './navigation.mjs';
 import {validateJevArgs} from './tools.mjs';
+import {loadMoreResults} from './more.mjs';
 import {logTab, shortUrl} from '../browser/tab-log.mjs';
 const urlHash = (url) => createHash('sha256').update(url).digest('hex');
 // Playwright protocol calls such as evaluate have no timeout of their own. A
@@ -1682,6 +1683,14 @@ export class JevBrowser {
           // The click changes the address (the shown listing); it is our own change.
           this.urlHashes.set(slot.id, urlHash(slot.page.url()));
           await this.persistTabs();
+        }
+        if (name === 'browser_load_more') {
+          if (!sourceScope || recordScope)
+            throw Error('More results are loaded only in a source scan tab.');
+          value = {
+            ...(await this.observe(slot)),
+            ...(await loadMoreResults(slot)),
+          };
         }
         if (name === 'browser_observe') {
           // Only an assigned read-only source tab may probe an expired gate.

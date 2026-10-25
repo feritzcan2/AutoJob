@@ -77,6 +77,12 @@ export const jevTools = [
     inputSchema: schema({tabId: string, url: string}),
   },
   {
+    name: 'browser_load_more',
+    description:
+      'Source scans only: on the results page open in this tab, scroll to where the site extension says the page loads its next results. Needs a site extension that loads more results on the same page. No model call; observe the page afterwards to see the new results.',
+    inputSchema: schema({tabId: string}),
+  },
+  {
     name: 'browser_inspect_form',
     description:
       'Read rendered form fields across the current page and frames, including below the fold, without clicking or submitting. Inspect once before asking questions and check again after meaningful form changes before submission. Check missingRequired and submitControls: a disabled Submit with unfilled required fields is an incomplete form, not an inaccessible button. Collect all missing facts/consents together. A field without required is unknown, not optional. Radio/checkbox options are grouped under their question with one controlId per option. Does not expose password values, call a model, or prove a past submission failed; use actual post-submit validation evidence for that.',

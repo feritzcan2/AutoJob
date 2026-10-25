@@ -539,6 +539,7 @@ export function automationWorkflow({
         autocomplete: 'browser_autocomplete',
         click: 'browser_click_target',
         scroll: 'browser_scroll',
+        more: 'browser_load_more',
         reveal: 'browser_reveal',
       };
       const searchId = active.scan?.work?.activeSearchId ?? 'default';
@@ -678,7 +679,7 @@ export function automationWorkflow({
             if (!response.jevPage) throw Error('Could not get the Jev task observation');
             if (
               operation === 'scan_results' &&
-              ['scroll', 'reveal', 'click'].includes(action) &&
+              ['scroll', 'reveal', 'click', 'more'].includes(action) &&
               !['no_progress', 'uncertain', 'stale', 'unsupported'].includes(
                 response.jevPage.status,
               ) &&

@@ -11,6 +11,7 @@ import {
   listingFirst,
   observedNextPage,
   paginationScrollTarget,
+  scrollsDown,
   urlShape,
   collapseActionLinks,
 } from './results.mjs';
@@ -539,6 +540,26 @@ export async function runJevTask({
     return page;
   };
   const observe = () => take('observe');
+  const pause = () =>
+    (ports.wait ?? ((ms, signal) => delay(ms, undefined, {signal})))(1000, signal);
+  // Scrolls the results down: the tallest container holds them, not a filter
+  // panel beside them. An endless list at the bottom gets a few seconds to load
+  // its next batch. Null when nothing is left to scroll.
+  const scrollResults = async (page) => {
+    const below = (observed) => {
+      const results = (observed.scrollTargets ?? []).toSorted(
+        (a, b) => (b.height ?? 0) - (a.height ?? 0),
+      )[0];
+      return results && scrollsDown(results) ? results : null;
+    };
+    let target = below(page);
+    for (let attempt = 0; !target && attempt < 5; attempt++) {
+      await pause();
+      check();
+      target = below(await observe());
+    }
+    return target ? take('scroll', {controlId: target.controlId, direction: 'down'}) : null;
+  };
   const issue = (reason, extra = {}) => {
     task.status = 'needs_agent';
     task.issue = {reason, ...extra};
@@ -932,7 +953,7 @@ export async function runJevTask({
           withinSlice();
           check();
           if (item.contentWait) {
-            await (ports.wait ?? ((ms, signal) => delay(ms, undefined, {signal})))(1000, signal);
+            await pause();
             check();
             item.contentWait.checks++;
           }
@@ -1593,6 +1614,26 @@ export async function runJevTask({
         save();
         break;
       }
+      // The site extension loads more results on this page as it is scrolled.
+      if (page.paginationBy && page.pagination?.some((p) => p.more)) {
+        const listed = (observed) => (observed.links ?? []).filter((l) => l.listing).length;
+        let result = await take('more');
+        if (!['no_progress', 'uncertain', 'stale', 'unsupported'].includes(result.status))
+          for (let attempt = 0; listed(result) <= listed(page) && attempt < 5; attempt++) {
+            await pause();
+            check();
+            result = await observe();
+          }
+        if (listed(result) <= listed(page)) {
+          issue('scroll_not_verified', {status: result.status});
+          break;
+        }
+        task.visited.push(sig);
+        delete task.pageWork;
+        cachedPage = result;
+        save();
+        continue;
+      }
       const scrollTarget = paginationScrollTarget(page, summary.position);
       if (scrollTarget && !observedNextPage(page, summary.position)) {
         const key = JSON.stringify([page.url, summary.position.currentPage]);
@@ -1718,14 +1759,11 @@ export async function runJevTask({
         break;
       }
       if (answer.choice === 'scroll') {
-        const target = (page.scrollTargets ?? []).find(
-          (t) => t.atBottom === false || t.remainingDown > 0,
-        );
-        if (!target) {
+        const result = await scrollResults(page);
+        if (!result) {
           issue('scroll_target_missing');
           break;
         }
-        const result = await take('scroll', {controlId: target.controlId, direction: 'down'});
         if (['no_progress', 'uncertain'].includes(result.status)) {
           issue('scroll_not_verified');
           break;
