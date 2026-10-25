@@ -43,6 +43,7 @@ export function createUpdateManager({
   env = process.env,
   fetchImpl = globalThis.fetch,
   autoCheck = false,
+  installTimeout = 5 * 60_000,
 }) {
   const enabled = Boolean(app.isPackaged) && (platform !== 'linux' || Boolean(env.APPIMAGE));
   let state = {
@@ -212,7 +213,10 @@ export function createUpdateManager({
     // then returns the step that installs the downloaded update (reopening the app
     // only when the user asked to install now). Null when there is nothing to
     // install or the backup failed; the download stays for the next start.
-    prepareQuitInstall: async () => {
+    // onFailure runs when the installer reports an error or never quits the app:
+    // on macOS Squirrel unpacks and verifies the update only now, and when that
+    // fails nothing quits the app, which stays open with its database closed.
+    prepareQuitInstall: async ({onFailure} = {}) => {
       if (!['downloaded', 'installing'].includes(state.status)) return null;
       if (typeof beforeInstall !== 'function') return null;
       try {
@@ -220,6 +224,19 @@ export function createUpdateManager({
         return async () => {
           await release?.();
           client.autoRunAppAfterInstall = restartAfterInstall;
+          if (onFailure) {
+            const fail = (error) => {
+              clearTimeout(timer);
+              client.removeListener('error', fail);
+              onFailure(error);
+            };
+            const timer = setTimeout(
+              () => fail(Error('The update did not install in time.')),
+              installTimeout,
+            );
+            timer.unref?.();
+            client.once('error', fail);
+          }
           client.quitAndInstall(true, restartAfterInstall);
         };
       } catch {

@@ -6,7 +6,8 @@ import {WEB_AGENTS, WEB_AGENT_ROLES} from './agents/automation-profiles.mjs';
 import {InstructionLog} from './system/instruction-log.mjs';
 import {webInstructionCatalog, instructionSnapshot} from './system/instruction-catalog.mjs';
 import {app, BrowserWindow, Menu, ipcMain, dialog, shell, safeStorage} from 'electron';
-import {mkdir, rm} from 'node:fs/promises';
+import {mkdir, readFile, rm} from 'node:fs/promises';
+import {writeFileSync} from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -556,6 +557,29 @@ async function boot() {
     },
     activeRunIds,
   });
+  // The app may run for days in the background, so a downloaded update would
+  // wait for a quit that never comes. It installs (and the app reopens) once
+  // nothing has run and the window was not in use for two checks in a row. A
+  // version whose install failed waits for the user, so a failing install
+  // does not restart the app again and again.
+  const failedUpdateFile = path.join(bootstrapDirectory, 'update-install-failed.json');
+  const failedUpdate = await readFile(failedUpdateFile, 'utf8')
+    .then((text) => JSON.parse(text).version)
+    .catch(() => null);
+  let idleUpdateChecks = 0;
+  scheduler.register(
+    'update-install',
+    async () => {
+      const version = settingsServices.downloadedUpdate(),
+        idle =
+          version && version !== failedUpdate && !activeRunIds().length && !window?.isFocused();
+      idleUpdateChecks = idle ? idleUpdateChecks + 1 : 0;
+      if (idleUpdateChecks < 2) return;
+      idleUpdateChecks = 0;
+      await settingsServices.installUpdate();
+    },
+    {interval: 10 * 60_000},
+  );
   window = new BrowserWindow({
     width: 1440,
     height: 950,
@@ -631,6 +655,9 @@ async function boot() {
     if (quitting) return;
     event.preventDefault();
     quitting = true;
+    // The database closes before the app exits; a late write must not open an
+    // error dialog that keeps the app (and an update install) from finishing.
+    process.on('uncaughtException', (error) => console.error('Error while quitting', error));
     background.dispose();
     settingsServices.dispose();
     scheduler.close();
@@ -642,14 +669,24 @@ async function boot() {
       await mcp.close();
       await devControl?.close();
       // A downloaded update installs now, after a backup, while the database is still open.
-      const install = await settingsServices.prepareQuitInstall().catch(() => null);
-      core.close();
-      if (install) await install().catch(() => app.quit());
-      else {
-        // Install now was chosen but could not run: reopen instead of staying closed.
+      // Install now was chosen but could not run: reopen instead of staying closed.
+      const reopen = () => {
         if (settingsServices.restartRequested()) app.relaunch();
         app.quit();
-      }
+      };
+      const version = settingsServices.updateVersion(),
+        failed = () => {
+          try {
+            writeFileSync(failedUpdateFile, JSON.stringify({version}));
+          } catch {}
+          reopen();
+        };
+      const install = await settingsServices
+        .prepareQuitInstall({onFailure: failed})
+        .catch(() => null);
+      core.close();
+      if (install) await install().catch(failed);
+      else reopen();
     })();
   });
 }

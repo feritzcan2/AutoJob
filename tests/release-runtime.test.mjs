@@ -63,6 +63,38 @@ test('install now quits the app; the quit backs up, then installs and reopens; a
   manager.dispose();
   assert.equal(updater.listenerCount('error'), 0);
 });
+test('an install the updater reports failed or never finishes hands the app back to reopen', async () => {
+  const run = async (installTimeout, outcome) => {
+    const updater = new EventEmitter(),
+      failures = [];
+    updater.quitAndInstall = () => outcome?.(updater);
+    const manager = createUpdateManager({
+      app: {isPackaged: true, getVersion: () => '0.1.0', quit: () => {}},
+      platform: 'darwin',
+      updater,
+      installTimeout,
+      beforeInstall: async () => {},
+    });
+    updater.emit('update-downloaded', {version: '0.2.0'});
+    const install = await manager.prepareQuitInstall({
+      onFailure: (error) => failures.push(error.message),
+    });
+    await install();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    manager.dispose();
+    return {failures, listeners: updater.listenerCount('error')};
+  };
+  // Squirrel could not unpack or verify the update.
+  assert.deepEqual(
+    await run(60_000, (updater) => updater.emit('error', Error('signature mismatch'))),
+    {failures: ['signature mismatch'], listeners: 0},
+  );
+  // Nothing quit the app.
+  assert.deepEqual(await run(5, null), {
+    failures: ['The update did not install in time.'],
+    listeners: 0,
+  });
+});
 test('install now first downloads a release published after the downloaded one', async () => {
   const updater = new EventEmitter(),
     calls = [];

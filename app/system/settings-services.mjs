@@ -220,7 +220,12 @@ export async function registerSettingsServices({
       clearInterval(timer);
       updates.dispose();
     },
-    prepareQuitInstall: () => updates.prepareQuitInstall(),
+    // The downloaded update's version, while it waits to install.
+    downloadedUpdate: () =>
+      updates.snapshot().status === 'downloaded' ? updates.snapshot().availableVersion : null,
+    updateVersion: () => updates.snapshot().availableVersion,
+    installUpdate: () => updates.install(),
+    prepareQuitInstall: (options) => updates.prepareQuitInstall(options),
     restartRequested: () => updates.restartRequested(),
   };
 }
