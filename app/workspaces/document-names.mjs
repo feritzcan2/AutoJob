@@ -25,6 +25,11 @@ export function cleanDocumentName(name, storedName) {
   return stem ? stem + extension : null;
 }
 
+// Each listed document with the name employers receive when it is uploaded:
+// the user's name for it, else the name it is stored under.
+export const withUploadNames = (docs, names) =>
+  docs.map((doc) => ({...doc, displayName: names.get(doc.path) ?? doc.name}));
+
 // Display names of the documents the user added, keyed by their path
 // relative to the workspace folder (forward slashes on every system).
 export class WorkspaceDocumentNames {
@@ -54,5 +59,10 @@ export class WorkspaceDocumentNames {
         'INSERT INTO workspace_document_names(workspace_id,path,name) VALUES(?,?,?) ON CONFLICT(workspace_id,path) DO UPDATE SET name=excluded.name',
       )
       .run(id, relative, name);
+  }
+  delete(id, relative) {
+    this.db
+      .prepare('DELETE FROM workspace_document_names WHERE workspace_id=? AND path=?')
+      .run(id, relative);
   }
 }

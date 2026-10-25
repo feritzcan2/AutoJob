@@ -101,28 +101,58 @@ export function isUploadTrigger({input, node}) {
 }
 
 export function validateUploadPurpose(label, filename) {
-  const name = filename.replace(/\.[^.]+$/, '');
-  if (
-    /cover\s*letter|anschreiben|ön\s*yazı/i.test(label) &&
-    /^(?:cv|resume|résumé)(?:[\s._-]|$)/i.test(name)
-  )
+  const name = filename.replace(/\.[^.]+$/, ''),
+    letterField = /cover\s*letter|anschreiben|ön\s*yazı/i.test(label),
+    cvField = /\b(?:resume|résumé|curriculum vitae|cv)\b/i.test(label);
+  // One field for either document ("Resume/CV or cover letter") takes both.
+  if (letterField && cvField) return;
+  if (letterField && /^(?:cv|resume|résumé)(?:[\s._-]|$)/i.test(name))
     throw Error(
       'A CV file cannot be uploaded to the cover letter field; choose the correct cover letter document.',
     );
-  if (
-    /\b(?:resume|résumé|curriculum vitae|cv)\b/i.test(label) &&
-    /^(?:cover[\s._-]*letter|anschreiben|ön[\s._-]*yazı)(?:[\s._-]|$)/i.test(name)
-  )
+  if (cvField && /^(?:cover[\s._-]*letter|anschreiben|ön[\s._-]*yazı)(?:[\s._-]|$)/i.test(name))
     throw Error(
       'A cover letter file cannot be uploaded to the CV field; choose the correct CV document.',
     );
 }
 
+// Playwright refuses in-memory files of 50 MB or more.
+const BUFFER_LIMIT = 50 * 1024 * 1024;
+
+// The name the page receives: the document's upload name, unless sending it
+// under that name would need an in-memory copy above Playwright's limit; such
+// a file keeps its stored name.
+export function receivedName(file, name, size) {
+  return name && size < BUFFER_LIMIT ? name : path.basename(file);
+}
+
 // What to hand to setInputFiles / FileChooser.setFiles so the page receives
-// the file under its upload name. A file whose stored name is already that
-// name is passed by path, unchanged; otherwise its bytes go under the new name
-// (no temporary copy is written).
+// the file under that name. A file whose stored name is already that name is
+// passed by path, unchanged; otherwise its bytes go under the new name (no
+// temporary copy is written).
 export async function uploadFile(file, name) {
   if (!name || name === path.basename(file)) return file;
   return {name, buffer: await readFile(file)};
+}
+
+// FNV-1a over a file's bytes. The page computes the same in selectedFileMatches;
+// crypto.subtle is missing on pages that are not a secure context (http).
+export function fileFingerprint(bytes) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < bytes.length; i++) hash = Math.imul(hash ^ bytes[i], 0x01000193);
+  return hash >>> 0;
+}
+
+// Whether the single file selected in the input has the content of file. A
+// renamed upload carries its bytes but not the file's modification time, so
+// name and size alone cannot tell two documents with the same name apart.
+export async function selectedFileMatches(input, file) {
+  const selected = await input.evaluate(async (e) => {
+    if (e.files.length !== 1) return null;
+    const bytes = new Uint8Array(await e.files[0].arrayBuffer());
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < bytes.length; i++) hash = Math.imul(hash ^ bytes[i], 0x01000193);
+    return hash >>> 0;
+  });
+  return selected === fileFingerprint(await readFile(file));
 }

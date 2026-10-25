@@ -280,7 +280,7 @@ export const automationTools = [
   ),
   tool(
     'browser_upload_document',
-    'Execute tasks only: upload one document listed in the saved proposal; no reservation needed. filePath is relative to this workspace; ref is a current uploads.uploadId, or the targetId of a visible upload button (e.g. "Upload CV") when uploads is empty. Never upload during preparation or verification.',
+    'Execute tasks only: upload one document listed in the saved proposal; no reservation needed. filePath is relative to this workspace; ref is a current uploads.uploadId, or the targetId of a visible upload button (e.g. "Upload CV") when uploads is empty. The page receives the file under its uploadNames entry from read_scoring_profile(source=documents) when it has one; the result names it as uploadedFileName. Never upload during preparation or verification.',
     {ref: str, filePath: str},
   ),
   tool(

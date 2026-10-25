@@ -7,9 +7,12 @@ const excluded = new Set(['runtime', 'node_modules', 'AGENTS.md', 'CLAUDE.md']);
 // documents/ holds only what the user added. Letters saved before the split
 // stay in documents/cover-letters/. Agent-written files are never user facts.
 export const AGENT_DIRECTORY = 'generated';
+// A workspace-relative path with forward slashes on every system: the key of
+// the saved document list and of the documents' upload names.
+export const documentKey = (relative) => relative.split(path.sep).join('/');
 export const agentDocument = (relative) =>
   [AGENT_DIRECTORY + '/', 'documents/cover-letters/'].some((prefix) =>
-    relative.split(path.sep).join('/').startsWith(prefix),
+    documentKey(relative).startsWith(prefix),
   );
 export async function documentPath(root, relative) {
   if (typeof relative !== 'string' || path.isAbsolute(relative)) throw Error('Invalid file');
@@ -45,8 +48,7 @@ export async function listDocuments(root) {
       }
       if (!entry.isFile() || !extensions.has(path.extname(entry.name).toLowerCase())) continue;
       try {
-        // Forward slashes on every system, matching the saved document list.
-        const relative = path.relative(root, file).split(path.sep).join('/'),
+        const relative = documentKey(path.relative(root, file)),
           safe = await documentPath(root, relative),
           info = await stat(safe);
         result.push({

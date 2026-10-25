@@ -15,6 +15,7 @@ import {webWorkspaceView} from '../workspaces/view.mjs';
 import {isConversation} from '../workspaces/conversation.mjs';
 import {setupAgentSettings} from '../agents/setup-agent.mjs';
 import {listDocuments} from './artifacts.mjs';
+import {withUploadNames} from '../workspaces/document-names.mjs';
 import {runSnapshot} from '../browser/automation-snapshot.mjs';
 import {jevProvider} from '../jev/policy.mjs';
 import {saveJevProfile, jevProfileView} from '../jev/qualification-profile.mjs';
@@ -251,7 +252,10 @@ export function registerAutomationServices({
         setupAgent: {settings: setupAgentSettings(db, id)},
         activeRun: activeRuns[0] ?? null,
         activeRuns,
-        documents: await listDocuments(workspace(id)),
+        documents: withUploadNames(
+          await listDocuments(workspace(id)),
+          db.store.workspaces.documentNames.all(id),
+        ),
         browserStatus: browsers.status(id),
         jevIssue: jevProvider.issue,
         jevProfile: jevProfileView(

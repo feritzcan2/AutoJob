@@ -9,7 +9,14 @@ import {observeFormFrame, actFormFrame, usableFormFrame} from './frame-actions.m
 import {captureCookieFrameTargets, clickCookieFrameTarget} from './cookie-frame.mjs';
 import {documentObservation, waitForDocument} from './document.mjs';
 import {readPane} from './pane.mjs';
-import {uploadDetails, validateUploadPurpose, isUploadTrigger, uploadFile} from './upload.mjs';
+import {
+  uploadDetails,
+  validateUploadPurpose,
+  isUploadTrigger,
+  receivedName,
+  uploadFile,
+  selectedFileMatches,
+} from './upload.mjs';
 import {capturePasswordFields, savedLoginState} from './credentials.mjs';
 import {captureEmbeddedForms, embeddedFormTarget} from './frames.mjs';
 import {takeUploadAttempt} from './upload-budget.mjs';
@@ -608,10 +615,15 @@ export class JevBrowser {
       );
     return slot;
   }
-  // The name the page receives: the user's name for the document, else the
-  // stored file name. Both are checked against the field's purpose.
-  async uploadName(file, label) {
-    const name = (await this.documentName(file).catch(() => null)) || path.basename(file);
+  // The name the page receives for a workspace file: the user's name for the
+  // document, else the stored file name. Both are checked against the field's
+  // purpose.
+  async uploadName(file, workspace, size, label) {
+    let name = null;
+    try {
+      name = await this.documentName(path.relative(workspace, file));
+    } catch {}
+    name = receivedName(file, name, size);
     validateUploadPurpose(label, path.basename(file));
     validateUploadPurpose(label, name);
     return name;
@@ -631,8 +643,8 @@ export class JevBrowser {
       workspace = await realpath(this.workspace ?? this.directory);
     if (!file.startsWith(workspace + path.sep) || !(await stat(file)).isFile())
       throw Error('Only files in the workspace of this candidate can be uploaded.');
-    const name = await this.uploadName(file, label);
-    const info = await stat(file);
+    const info = await stat(file),
+      name = await this.uploadName(file, workspace, info.size, label);
     if (
       !takeUploadAttempt(
         slot,
@@ -1913,26 +1925,25 @@ export class JevBrowser {
             workspace = await realpath(this.workspace ?? this.directory);
           if (!file.startsWith(workspace + path.sep) || !(await stat(file)).isFile())
             throw Error('Only files in the workspace of this candidate can be uploaded.');
-          const name = await this.uploadName(file, upload.details.label);
+          const info = await stat(file),
+            name = await this.uploadName(file, workspace, info.size, upload.details.label);
           slot.pending = null;
           slot.uploads.delete(args.uploadId);
           try {
-            const info = await stat(file),
-              selected = await upload.input.evaluate((e) =>
-                [...e.files].map((f) => ({
-                  name: f.name,
-                  size: f.size,
-                  lastModified: f.lastModified,
-                })),
-              );
-            // A renamed upload carries its bytes, not the file's modification time.
-            const payload = await uploadFile(file, name),
-              alreadySelected =
-                selected.length === 1 &&
-                selected[0].name === name &&
-                selected[0].size === info.size &&
-                (typeof payload !== 'string' ||
-                  selected[0].lastModified === Math.trunc(info.mtimeMs));
+            const selected = await upload.input.evaluate((e) =>
+              [...e.files].map((f) => ({
+                name: f.name,
+                size: f.size,
+                lastModified: f.lastModified,
+              })),
+            );
+            const alreadySelected =
+              selected.length === 1 &&
+              selected[0].name === name &&
+              selected[0].size === info.size &&
+              (name === path.basename(file)
+                ? selected[0].lastModified === Math.trunc(info.mtimeMs)
+                : await selectedFileMatches(upload.input, file));
             const key = JSON.stringify([upload.url, upload.details, file, info.size, info.mtimeMs]);
             if (alreadySelected)
               value = {
@@ -1951,7 +1962,7 @@ export class JevBrowser {
                   'The limit of two attempts or 60 seconds for the same file/field was reached. Keep the draft and report the actual technical blocker; do not open the file chooser again.',
               };
             else {
-              await upload.input.setInputFiles(payload, {timeout: 10000});
+              await upload.input.setInputFiles(await uploadFile(file, name), {timeout: 10000});
               value = {
                 ...(await this.observe(slot)),
                 status: 'ready',

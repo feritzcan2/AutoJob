@@ -342,7 +342,7 @@ async function boot() {
       config: () => jevSettings.config(),
       profile: core.workspaces.get(id).chromeProfile,
       lifecycle: {multiWorker: true},
-      documentName: (file) => documents.displayName(id, file),
+      documentName: (relative) => documents.displayName(id, relative),
     }),
     workers: {
       add: (id, input) => web.runtime.add(id, input),

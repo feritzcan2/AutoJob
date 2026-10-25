@@ -9,7 +9,13 @@ import {chromium} from 'patchright-core';
 import {WorkspaceDatabase} from '../app/workspaces/database.mjs';
 import {WorkspaceDocuments} from '../app/workspaces/documents.mjs';
 import {cleanDocumentName} from '../app/workspaces/document-names.mjs';
-import {uploadFile} from '../app/jev/upload.mjs';
+import {loadScoringDocuments} from '../app/scoring/profile.mjs';
+import {
+  uploadFile,
+  receivedName,
+  selectedFileMatches,
+  validateUploadPurpose,
+} from '../app/jev/upload.mjs';
 import {JevBrowser} from '../app/jev/browser.mjs';
 import {createBackup} from '../app/system/data-management.mjs';
 
@@ -69,7 +75,8 @@ async function fixture(t) {
     core.close();
     await rm(base, {recursive: true, force: true});
   });
-  return {base, root, core, id, documents, add, changes};
+  const named = (file) => documents.displayName(id, path.relative(root, file));
+  return {base, root, core, id, documents, add, changes, named};
 }
 
 test('an added document keeps its ID name on disk and its original name for uploads', async (t) => {
@@ -86,10 +93,13 @@ test('an added document keeps its ID name on disk and its original name for uplo
     assert.equal(doc.displayName, 'Omar Rashad - Resume.pdf');
     assert.match(doc.name, /^[0-9a-f-]{36}\.pdf$/);
   }
-  assert.equal(await f.documents.displayName(f.id, first), 'Omar Rashad - Resume.pdf');
+  assert.equal(f.named(first), 'Omar Rashad - Resume.pdf');
   const cv = await f.add('my cv (final).pdf', 'cv', 'cv');
   assert.equal(path.basename(cv), 'CV.pdf');
-  assert.equal(await f.documents.displayName(f.id, cv), 'my cv (final).pdf');
+  assert.equal(f.named(cv), 'my cv (final).pdf');
+  // A new CV at the same path whose name cannot be kept drops the old name.
+  await f.add('...pdf', 'new cv', 'cv');
+  assert.equal(f.named(cv), null);
 });
 
 test('a document without a saved name keeps its stored name', async (t) => {
@@ -99,11 +109,8 @@ test('a document without a saved name keeps its stored name', async (t) => {
   await writeFile(legacy, 'legacy');
   const [doc] = await f.documents.list(f.id);
   assert.equal(doc.displayName, 'earlier.pdf');
-  assert.equal(await f.documents.displayName(f.id, legacy), null);
-  assert.equal(
-    await f.documents.displayName(f.id, path.join(f.base, 'outside.pdf')).catch(() => null),
-    null,
-  );
+  assert.equal(f.named(legacy), null);
+  assert.equal(f.named(path.join(f.base, 'outside.pdf')), null);
 });
 
 test('renaming changes only the upload name, never the stored file', async (t) => {
@@ -115,7 +122,7 @@ test('renaming changes only the upload name, never the stored file', async (t) =
     await f.documents.rename(f.id, relative, '  Omar Rashad / Resume  '),
     'Omar Rashad - Resume.pdf',
   );
-  assert.equal(await f.documents.displayName(f.id, file), 'Omar Rashad - Resume.pdf');
+  assert.equal(f.named(file), 'Omar Rashad - Resume.pdf');
   assert.deepEqual(await readdir(path.join(f.root, 'documents')), [path.basename(file)]);
   assert.equal(await readFile(file, 'utf8'), 'resume');
   assert.equal((await stat(file)).mtimeMs, before.mtimeMs);
@@ -184,23 +191,65 @@ test('data saved before document names opens with stored names as upload names',
 });
 
 test('the upload name is checked against the field purpose and falls back to the stored name', async () => {
-  const name = (resolved) =>
-    JevBrowser.prototype.uploadName.bind({documentName: async () => resolved});
-  assert.equal(
-    await name('Omar - Resume.pdf')('/w/documents/id.pdf', 'Resume'),
-    'Omar - Resume.pdf',
-  );
-  assert.equal(await name(null)('/w/documents/id.pdf', 'Resume'), 'id.pdf');
-  const failing = JevBrowser.prototype.uploadName.bind({
-    documentName: async () => {
-      throw Error('database closed');
-    },
-  });
-  assert.equal(await failing('/w/documents/id.pdf', 'Resume'), 'id.pdf');
-  await assert.rejects(
-    name('CV - Omar.pdf')('/w/documents/id.pdf', 'Cover letter'),
-    /cover letter field/,
-  );
+  const workspace = '/w',
+    file = '/w/documents/id.pdf',
+    name =
+      (resolved) =>
+      (label, size = 1) =>
+        JevBrowser.prototype.uploadName.call(
+          {documentName: async () => resolved},
+          file,
+          workspace,
+          size,
+          label,
+        );
+  assert.equal(await name('Omar - Resume.pdf')('Resume'), 'Omar - Resume.pdf');
+  assert.equal(await name(null)('Resume'), 'id.pdf');
+  const failing = (label) =>
+    JevBrowser.prototype.uploadName.call(
+      {
+        documentName: () => {
+          throw Error('database closed');
+        },
+      },
+      file,
+      workspace,
+      1,
+      label,
+    );
+  assert.equal(await failing('Resume'), 'id.pdf');
+  await assert.rejects(name('CV - Omar.pdf')('Cover letter'), /cover letter field/);
+  // One field for either document accepts a CV by its upload name.
+  assert.equal(await name('CV_John.pdf')('Resume/CV or cover letter'), 'CV_John.pdf');
+  // Above Playwright's in-memory limit the file keeps its stored name.
+  assert.equal(await name('Omar - Resume.pdf')('Resume', 60 * 1024 * 1024), 'id.pdf');
+  assert.equal(receivedName(file, 'Omar - Resume.pdf', 50 * 1024 * 1024), 'id.pdf');
+  assert.doesNotThrow(() => validateUploadPurpose('Resume/CV or cover letter', 'CV.pdf'));
+});
+
+test('agents read the upload names of the documents outside the scored text', async (t) => {
+  const base = await mkdtemp(path.join(tmpdir(), 'jobloop-upload-names-scoring-'));
+  t.after(() => rm(base, {recursive: true, force: true}));
+  await mkdir(path.join(base, 'w', 'documents'), {recursive: true});
+  await writeFile(path.join(base, 'w', 'documents', 'a.txt'), 'Five years of compliance.');
+  await writeFile(path.join(base, 'w', 'documents', 'b.txt'), 'German C1');
+  const names = new Map([['documents/a.txt', 'Resume.txt']]),
+    db = {
+      userDocuments: () => ['documents/a.txt', 'documents/b.txt'],
+      store: {
+        directory: base,
+        workspaces: {
+          get: () => ({id: 'w', storagePath: 'w'}),
+          documentNames: {all: () => names},
+        },
+      },
+    };
+  const first = await loadScoringDocuments(db, 'w');
+  assert.deepEqual(first.uploadNames, {'documents/a.txt': 'Resume.txt'});
+  names.set('documents/a.txt', 'Renamed.txt');
+  const renamed = await loadScoringDocuments(db, 'w');
+  assert.deepEqual(renamed.uploadNames, {'documents/a.txt': 'Renamed.txt'});
+  assert.equal(renamed.digest, first.digest, 'a rename does not change what is scored');
 });
 
 test('the page receives the display name with the original bytes; unnamed files go by path', async (t) => {
@@ -227,6 +276,11 @@ test('the page receives the display name with the original bytes; unnamed files 
     type: 'application/pdf',
     text: '%PDF-1.4 synthetic resume',
   });
+  // Another document under the same name and size is not the selected file.
+  const other = path.join(base, 'other.pdf');
+  await writeFile(other, '%PDF-1.4 synthetic letter');
+  assert.equal(await selectedFileMatches(input, file), true);
+  assert.equal(await selectedFileMatches(input, other), false);
   await input.setInputFiles(await uploadFile(file, null));
   assert.equal((await received()).name, path.basename(file));
   // A button that opens the file chooser receives the same name.

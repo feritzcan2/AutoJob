@@ -179,6 +179,8 @@ export function automationsPage(
     generation = 0,
     busy = false,
     dirty = false,
+    // The open document rename form ({path, value}); it survives re-renders.
+    renaming = null,
     formRevision = '',
     formBaseline = null,
     resultsTable = null;
@@ -453,6 +455,7 @@ export function automationsPage(
     pane = null;
     formRevision = '';
     dirty = false;
+    renaming = null;
     buildDetail();
     navigate('board');
     await refresh();
@@ -1517,28 +1520,41 @@ export function automationsPage(
       };
     };
     // A user document is uploaded under its display name; Rename edits only
-    // that name, never the stored file.
-    const renameForm = (row, doc) => {
+    // that name, never the stored file. A refresh while the form is open
+    // rebuilds it with what was typed and where the cursor was.
+    const renameForm = (row, doc, focus) => {
       const form = el('form', null, 'document-rename'),
         input = el('input');
-      input.value = doc.displayName ?? doc.name;
+      input.value = renaming.value;
       input.maxLength = 120;
       input.setAttribute('aria-label', 'File name employers receive');
+      input.oninput = () => (renaming.value = input.value);
       const save = el('button', 'Save', 'primary');
       save.type = 'submit';
-      const cancel = button('Cancel', () => renderWorkspacePages());
+      const cancel = button('Cancel', () => {
+        renaming = null;
+        renderWorkspacePages();
+      });
       form.onsubmit = attempt(async () => {
         await api.renameDocument(selected, doc.path, input.value);
+        renaming = null;
         await refresh();
       });
       form.append(input, save, cancel);
       row.replaceChildren(form);
-      input.focus();
-      input.select();
+      if (focus) {
+        input.focus();
+        input.setSelectionRange(focus.start, Math.min(focus.end, input.value.length));
+      }
     };
     // Newest first, each with the time it was created.
     const fileList = (target, docs, empty, {rename = false} = {}) => {
-      const files = find(target);
+      const files = find(target),
+        open = files.querySelector('.document-rename input'),
+        focus =
+          open && open === document.activeElement
+            ? {start: open.selectionStart ?? 0, end: open.selectionEnd ?? 0}
+            : null;
       files.replaceChildren();
       const newest = [...docs].sort((a, b) =>
         (b.createdAt ?? b.updatedAt).localeCompare(a.createdAt ?? a.updatedAt),
@@ -1554,10 +1570,20 @@ export function automationsPage(
         name.append(el('small', 'Created ' + time(doc.createdAt ?? doc.updatedAt)));
         const actions = el('div', null, 'document-actions');
         if (detail?.url) actions.append(button('Open listing ↗', () => api.openLink(detail.url)));
-        if (rename) actions.append(button('Rename', () => renameForm(row, doc)));
+        if (rename)
+          actions.append(
+            button('Rename', () => {
+              renaming = {path: doc.path, value: doc.displayName ?? doc.name};
+              renderWorkspacePages();
+              const input = find(target + ' .document-rename input');
+              input?.focus();
+              input?.select();
+            }),
+          );
         actions.append(button('Open ↗', () => api.openDocument(selected, doc.path)));
         row.append(name, actions);
         files.append(row);
+        if (rename && renaming?.path === doc.path) renameForm(row, doc, focus);
       }
       if (!docs.length) files.append(el('p', empty, 'empty'));
     };
@@ -1815,6 +1841,7 @@ export function automationsPage(
     selected = null;
     data = null;
     dirty = false;
+    renaming = null;
     formRevision = '';
     localStorage.removeItem('selected-workspace');
     navigate('start', {detail: true});

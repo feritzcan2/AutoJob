@@ -102,9 +102,15 @@ export async function loadScoringDocuments(db, id) {
     return source('', {
       unavailable: 'No saved documents; leave unverified information as unknown.',
     });
-  const {documents, skipped} = read;
+  const {documents, skipped} = read,
+    names = db.store.workspaces.documentNames?.all(id) ?? new Map();
+  // Upload names stay outside the text, so renaming a document changes no digest.
+  const uploadNames = Object.fromEntries(
+    documents.filter((d) => names.has(d.path)).map((d) => [d.path, names.get(d.path)]),
+  );
   return source(documents.map((d) => `## ${d.path}\n${d.text}`).join('\n\n'), {
     paths: documents.map((d) => d.path),
+    ...(Object.keys(uploadNames).length ? {uploadNames} : {}),
     ...(skipped.length
       ? {
           unavailable: `Unreadable documents: ${skipped.join('; ')}. Information from these documents stays unknown.`,

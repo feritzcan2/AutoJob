@@ -6,8 +6,9 @@ import {
   documentPath,
   readDocument,
   agentDocument,
+  documentKey,
 } from '../automation/artifacts.mjs';
-import {cleanDocumentName} from './document-names.mjs';
+import {cleanDocumentName, withUploadNames} from './document-names.mjs';
 
 const extensions = {
   attachment: ['pdf', 'docx', 'txt', 'md', 'png', 'jpg', 'jpeg'],
@@ -24,20 +25,15 @@ export class WorkspaceDocuments {
   get names() {
     return this.workspaces.store.documentNames;
   }
-  // Each document carries the name employers receive when it is uploaded:
-  // the user's chosen name, else the name it is stored under.
   list(id) {
-    const root = this.directory(id),
-      names = this.names.all(id);
-    return listDocuments(root).then((docs) =>
-      docs.map((doc) => ({...doc, displayName: names.get(doc.path) ?? doc.name})),
+    return listDocuments(this.directory(id)).then((docs) =>
+      withUploadNames(docs, this.names.all(id)),
     );
   }
   async rename(id, file, name) {
     this.workspaces.assertMutable(id);
     const root = this.directory(id),
-      relative = path.relative(await realpath(root), await documentPath(root, file));
-    const key = relative.split(path.sep).join('/');
+      key = documentKey(path.relative(await realpath(root), await documentPath(root, file)));
     if (agentDocument(key)) throw Error('Only documents you added can be renamed');
     const clean = cleanDocumentName(name, key);
     if (!clean) throw Error('Enter a file name');
@@ -45,13 +41,9 @@ export class WorkspaceDocuments {
     this.workspaces.changed(id);
     return clean;
   }
-  // The upload name of an absolute workspace file, or null when it has none.
-  async displayName(id, file) {
-    const base = await realpath(this.directory(id)),
-      relative = path.relative(base, await realpath(file));
-    if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative))
-      return null;
-    return this.names.get(id, relative.split(path.sep).join('/'));
+  // The upload name of a document by its workspace-relative path, or null.
+  displayName(id, relative) {
+    return this.names.get(id, documentKey(relative));
   }
   read(id, file) {
     return readDocument(this.directory(id), file);
@@ -89,14 +81,16 @@ export class WorkspaceDocuments {
       await mkdir(path.dirname(target), {recursive: true, mode: 0o700});
       await copyFile(source, target);
       await chmod(target, 0o600);
-      const key = relative.split(path.sep).join('/'),
+      const key = documentKey(relative),
         name = cleanDocumentName(path.basename(source), key);
+      // A reused path (CV.pdf) never keeps the name of the file it replaced.
       if (name) this.names.set(id, key, name);
+      else this.names.delete(id, key);
       await driver.documentAdded?.(id, {
         purpose,
         path: target,
         relative,
-        name: path.basename(source),
+        name: name ?? path.basename(target),
       });
       this.workspaces.changed(id);
       return target;
