@@ -54,7 +54,7 @@
     "test:background:ui": "node scripts/smoke-background.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.32.1",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@playwright/mcp": "0.0.83",
     "@termloop/terminal-surface": "file:vendor/termloop/packages/termloop-terminal-surface-2.0.7.tgz",
     "@termloop/terminal-wire": "file:vendor/termloop/packages/termloop-terminal-wire-2.0.7.tgz",
