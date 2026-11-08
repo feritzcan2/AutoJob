@@ -12,6 +12,21 @@ import {autoContactsMode} from './operation-definitions.mjs';
 const live = ['pending', 'running', 'reported', 'paused'];
 const automaticRecordScanInterval = 10_000;
 const waitingForAnswer = 'Answer the pending questions for this record first';
+// Automatic applications hold while this many records wait for the user's
+// answer, and continue on their own once answers bring the count below it.
+export const MAX_RECORDS_AWAITING_ANSWER = 5;
+// Records with an open question the user owes. A cover letter being written is
+// agent work, not an answer the user owes.
+function recordsAwaitingAnswer(a) {
+  const ids = new Set();
+  for (const q of a.questions ?? [])
+    if (!q.conversation && q.answer == null && q.recordId && q.coverLetter?.state !== 'writing')
+      ids.add(q.recordId);
+  return ids.size;
+}
+export const automaticApplicationsHeld = (a) =>
+  recordsAwaitingAnswer(a) >= MAX_RECORDS_AWAITING_ANSWER;
+const automaticApplication = (t) => t.recordOperation === 'execute' && !t.request?.manual;
 // When the user switched to Find and apply without queueing existing records,
 // only records saved after the switch are applied to automatically.
 export const savedBeforeAutoApply = (a, item) =>
@@ -491,6 +506,7 @@ export async function dispatchRecordOperations(runtime, id, {manualOnly = false}
       }
     }
   }
+  const holdApplications = automaticApplicationsHeld(a);
   const customRecordWorkflow = db.template(a.templateId).workflow.some((s) => s.scope === 'record');
   // Automatic scheduling reads every record and record task. A few seconds of
   // delay does not matter, so it runs at most once per interval per workspace,
@@ -512,7 +528,7 @@ export async function dispatchRecordOperations(runtime, id, {manualOnly = false}
           .filter((t) => live.includes(t.state) && t.recordOperation !== 'contacts')
           .flatMap(taskRecordIds),
       );
-    for (const item of autoApply ? db.results(id) : []) {
+    for (const item of autoApply && !holdApplications ? db.results(id) : []) {
       // Scheduling needs source permissions, not the UI projection that loads
       // every result and run. Read those settings once with the workspace.
       if (
@@ -549,7 +565,8 @@ export async function dispatchRecordOperations(runtime, id, {manualOnly = false}
       (t) =>
         t.recordOperation &&
         (!t.retryAt || t.retryAt <= runtime.now()) &&
-        (t.request?.manual || (!manualOnly && a.status === 'enabled')),
+        (t.request?.manual || (!manualOnly && a.status === 'enabled')) &&
+        !(holdApplications && automaticApplication(t)),
     )
     .sort((x, y) => Number(Boolean(y.request?.manual)) - Number(Boolean(x.request?.manual)));
   for (const worker of runtime.workers.list(id)) {
@@ -706,6 +723,11 @@ export function recordOperationState(
                 ['running', 'reported', 'paused'].includes(t.state),
             )
               ? {waitingForApplication: true}
+              : {}),
+            ...(task.state === 'pending' &&
+            automaticApplication(task) &&
+            automaticApplicationsHeld(a)
+              ? {waitingForAnswers: MAX_RECORDS_AWAITING_ANSWER}
               : {}),
           }
         : null,

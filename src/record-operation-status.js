@@ -83,11 +83,13 @@ export function recordOperationStatus(record) {
         tone: 'queued',
         detail: task.retryAt
           ? `Waiting for a site access wait; resumes after ${new Date(task.retryAt).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}.`
-          : task.waitingForApplication
-            ? 'Waiting for the current application to finish; applications run one at a time.'
-            : task.manual
-              ? 'The first free agent will take this record.'
-              : 'Waiting for an available agent.',
+          : task.waitingForAnswers
+            ? `Automatic applications wait while ${task.waitingForAnswers} or more applications await your answer; this one starts once you answer some.`
+            : task.waitingForApplication
+              ? 'Waiting for the current application to finish; applications run one at a time.'
+              : task.manual
+                ? 'The first free agent will take this record.'
+                : 'Waiting for an available agent.',
         active: true,
       };
     if (task.state === 'reported')

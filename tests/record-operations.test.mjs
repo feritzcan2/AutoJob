@@ -763,6 +763,88 @@ test('automatic execution is independent of source completion, and prepare mode 
   assert.equal(f.db.sources(f.id)[0].blocked, true);
 });
 
+// Saves records for open questions, before the workspace starts work on its own.
+function waitingRecords(f, count) {
+  const run = f.db.begin(f.id, 'run'),
+    ids = [];
+  for (let n = 1; n <= count; n++)
+    ids.push(
+      f.db.record(f.id, run.id, {
+        key: source + '/waiting-' + n,
+        url: source + '/waiting-' + n,
+        title: 'Waiting ' + n,
+        summary: 'Observed facts',
+      }).id,
+    );
+  f.db.finish(f.id, run.id, 'completed', 'Saved');
+  return ids;
+}
+const openQuestion = (n, recordId, extra = {}) => ({
+  id: 'q' + n,
+  recordId,
+  text: 'Question ' + n,
+  answer: null,
+  createdAt: 1,
+  ...extra,
+});
+
+test('automatic applications hold while five records await an answer and resume below that', async (t) => {
+  const f = fixture(t);
+  const ids = waitingRecords(f, 6);
+  f.db.put({...f.db.get(f.id), mode: 'auto'});
+  f.db.enable(f.id);
+  const a = f.db.get(f.id);
+  f.db.putResult({
+    ...f.db.result(f.id, f.item.id),
+    assessment: {score: 95, scoringVersion: 4, revision: a.revision, eligibility: 'verified'},
+  });
+  // Two questions on one record count once; a cover letter being written does not count.
+  f.db.put({
+    ...f.db.get(f.id),
+    questions: [
+      ...ids.slice(0, 5).map((recordId, i) => openQuestion(i + 1, recordId)),
+      openQuestion(6, ids[4]),
+      openQuestion(7, ids[5], {coverLetter: {state: 'writing'}}),
+    ],
+  });
+  await dispatchRecordOperations(f.runtime, f.id);
+  await settle();
+  assert.equal(f.launches.length, 0);
+  // An automatic task queued before the limit was reached waits instead of starting.
+  const task = enqueueRecordOperation(f.runtime, f.id, f.item.id, 'execute', {manual: false});
+  await dispatchRecordOperations(f.runtime, f.id);
+  await settle();
+  assert.equal(f.launches.length, 0);
+  assert.equal(f.runtime.queue.get(f.id, task.id).state, 'pending');
+  const status = recordOperationStatus(f.db.snapshot(f.id).results.find((r) => r.id === f.item.id));
+  assert.match(status.detail, /await your answer/);
+  // Answering one question brings the count below five; the application starts on its own.
+  f.db.put({
+    ...f.db.get(f.id),
+    questions: f.db
+      .get(f.id)
+      .questions.map((q) => (q.id === 'q1' ? {...q, answer: 'Yes', answeredAt: 1} : q)),
+  });
+  await dispatchRecordOperations(f.runtime, f.id);
+  await settle();
+  assert.equal(f.launches.at(-1)?.recordOperation, 'execute');
+  assert.equal(f.launches.at(-1).request.manual, false);
+});
+
+test('a user request to apply runs while five records await an answer', async (t) => {
+  const f = fixture(t);
+  const ids = waitingRecords(f, 5);
+  f.db.put({
+    ...f.db.get(f.id),
+    mode: 'auto',
+    questions: ids.map((recordId, i) => openQuestion(i + 1, recordId)),
+  });
+  await f.runtime.runRecord(f.id, f.item.id, 'execute');
+  await settle();
+  assert.equal(f.launches.at(-1)?.recordOperation, 'execute');
+  assert.equal(f.launches.at(-1).request.manual, true);
+});
+
 test('record tasks have an independent retained browser tab key across redirects', async () => {
   const calls = [],
     browser = {
