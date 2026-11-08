@@ -474,6 +474,7 @@ test('records waiting on the user reach a sidebar page; other stopped records do
       label: 'Login needed',
       message: 'The form needs an account.',
       next: 'Log in',
+      canDismissRecord: true,
     },
     {
       id: 'record-problem:unclear',
@@ -483,6 +484,7 @@ test('records waiting on the user reach a sidebar page; other stopped records do
       label: 'Outcome needs verification',
       message: 'No confirmation.',
       next: undefined,
+      canDismissRecord: true,
     },
   ]);
 });

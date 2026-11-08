@@ -44,6 +44,7 @@ export function recordAttention(snapshot, issues) {
             label: problem.label,
             message: problem.reason,
             next: problem.next,
+            canDismissRecord: ['found', 'prepared', 'uncertain'].includes(record.status),
           },
         ]
       : [];
@@ -450,6 +451,27 @@ export function automationAttentionPanel(
     list.append(card);
     return {card, open};
   }
+  // Skips the card's record (as the table's Skip does) and closes the notice.
+  function skipButton(issue, open, feedback) {
+    const workspace = owner,
+      skip = el('button', 'Skip', 'quiet');
+    skip.type = 'button';
+    skip.dataset.recordDismiss = issue.recordId;
+    skip.title = 'Skip this record and close this notice';
+    skip.onclick = async () => {
+      open.disabled = skip.disabled = true;
+      feedback.textContent = '';
+      try {
+        await api.automationDismiss(workspace, issue.recordId);
+        if (owner === workspace) await refresh();
+      } catch (error) {
+        feedback.textContent = error.message;
+      } finally {
+        open.disabled = skip.disabled = false;
+      }
+    };
+    return skip;
+  }
   function createToolFailure(issue) {
     const workspace = owner,
       card = el('article', null, 'automation-help-card');
@@ -466,25 +488,7 @@ export function automationAttentionPanel(
         ?.scrollIntoView({block: 'center', behavior: 'smooth'});
     };
     actions.append(open);
-    if (issue.canDismissRecord) {
-      const skip = el('button', 'Skip', 'quiet');
-      skip.type = 'button';
-      skip.dataset.recordDismiss = issue.recordId;
-      skip.title = 'Skip this record and close this notice';
-      skip.onclick = async () => {
-        open.disabled = skip.disabled = true;
-        feedback.textContent = '';
-        try {
-          await api.automationDismiss(workspace, issue.recordId);
-          if (owner === workspace) await refresh();
-        } catch (error) {
-          feedback.textContent = error.message;
-        } finally {
-          open.disabled = skip.disabled = false;
-        }
-      };
-      actions.append(skip);
-    }
+    if (issue.canDismissRecord) actions.append(skipButton(issue, open, feedback));
     card.append(
       el('span', 'Repeated error · Task stopped', 'automation-help-label'),
       el('h3', issue.name),
@@ -508,7 +512,9 @@ export function automationAttentionPanel(
       heading = el('div', null, 'automation-help-heading'),
       copy = el('div'),
       open = el('button', 'Show record', 'primary'),
-      actions = el('div', null, 'automation-help-actions');
+      actions = el('div', null, 'automation-help-actions'),
+      feedback = el('p');
+    feedback.setAttribute('role', 'status');
     card.dataset.issueId = issue.id;
     card.dataset.kind = issue.kind;
     open.type = 'button';
@@ -516,6 +522,7 @@ export function automationAttentionPanel(
     copy.append(el('span', issue.label, 'automation-help-label'), el('h3', issue.name));
     heading.append(el('span', '!', 'attention-icon'), copy);
     actions.append(open);
+    if (issue.canDismissRecord) actions.append(skipButton(issue, open, feedback));
     card.append(
       heading,
       el('p', issue.message, 'automation-help-summary'),
@@ -525,6 +532,7 @@ export function automationAttentionPanel(
         'automation-help-instructions',
       ),
       actions,
+      feedback,
     );
     list.append(card);
     return {card, open};
